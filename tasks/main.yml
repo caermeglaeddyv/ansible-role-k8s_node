@@ -1,0 +1,59 @@
+---
+# tasks file for worker
+- name: copy worker node join config
+  template:
+    src: kubeadm-join-config.yml.j2
+    dest: $HOME/kubeadm-join-config.yml
+    mode: 0400
+
+- name: join worker node to the cluster
+  shell: |
+    /bin/kubeadm join --config=$HOME/kubeadm-join-config.yml \
+    {% if kubernetes_ignore_preflight_errors -%}
+    --ignore-preflight-errors={% for error in kubernetes_ignore_preflight_errors %}{{ error }}{{ "," if not loop.last }}{% endfor %}
+    {% endif -%}
+     > $HOME/cluster-join_{{ inventory_hostname_short }}.log
+
+- name: delete join config
+  file:
+    path: $HOME/kubeadm-join-config.yml
+    state: absent
+
+- name: delete cluster join log file from remote
+  file:
+    path: $HOME/cluster-join_{{ inventory_hostname_short }}.log
+    state: absent
+
+- name: taint worker nodes
+  shell: |
+    KUBECONFIG={{ kubernetes_project_dir }}/master/admin.conf \
+    kubectl taint node {{ item.node }} {{ item.taint }} --overwrite=true
+  with_items: "{{ kubernetes_taints }}"
+  delegate_to: localhost
+  connection: local
+  run_once: true
+  become: no
+  when: kubernetes_taints | length
+
+- name: do some k8s security hardening
+  shell: |
+    set -o pipefail \
+    && kubectl get clusterrolebinding kubeadm:node-autoapprove-bootstrap -oyaml \
+    | tee crb-kubeadm-node-approve-bootstrap.yml \
+    && kubectl delete clusterrolebinding kubeadm:node-autoapprove-bootstrap \
+    && kubectl -n kube-public get cm cluster-info -o yaml \
+    | grep "kubeconfig:" -A11 | grep "apiVersion" -A10 | sed "s/    //" | tee cluster-info.yaml \
+    && kubectl -n kube-public get rolebinding kubeadm:bootstrap-signer-clusterinfo -oyaml \
+    | tee rb-kubeadm-bootstrap-signer-clusterinfo.yml \
+    && kubectl -n kube-public delete rolebinding kubeadm:bootstrap-signer-clusterinfo
+  environment:
+    KUBECONFIG: admin.conf
+    ANSIBLE_KUBERNETES_WORKDIR: "{{ kubernetes_project_dir }}/master"
+  args:
+    executable: /bin/bash
+    chdir: $ANSIBLE_KUBERNETES_WORKDIR
+  delegate_to: localhost
+  connection: local
+  run_once: true
+  become: no
+  when: kubernetes_harden_join

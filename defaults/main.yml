@@ -1,0 +1,38 @@
+---
+# defaults file for worker
+
+
+# Variable which is common for most projects, used in
+# configuration files or file/directory names.
+# By default used as reference for kubernetes_project_dir variable:
+kubernetes_project_name: test
+
+# Variable which is common for most projects, used as
+# project working directory on the localhost for the role.
+# Currently is used for copying admin kubeconfig file or making symlink to it,
+# to be able to connect to the cluster and perform taints and/or hardening:
+kubernetes_project_dir: files/{{ kubernetes_project_name }}
+
+# DNS name or IP address which will be listening for apiserver requests,
+# this must equal to virtual IP to work correct in HA setup:
+kubernetes_apiserver_host: ""
+
+# Port which will listen for apiserser requests on apiserver host:
+kubernetes_apiserver_port:
+
+# Token which will be used in cluster initialization, so
+# other nodes can join the cluster using it:
+kubernetes_bootstrap_token: ""          # 123456.abcdefghijklmnop
+
+# List of preflight errors which must be ignored while initializing
+# cluster or joining node to existing cluster via kubeadm:
+kubernetes_ignore_preflight_errors:
+# - NumCPU
+
+# Taints which must be present on nodes:
+kubernetes_taints: []
+# - node: ""
+#   taint: ""
+
+# Disable automatic node join to the cluster:
+kubernetes_harden_join: false
